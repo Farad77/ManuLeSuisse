@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionnaire de Tournoi</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        input, button { margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Gestionnaire de Tournoi</h1>
+    <div id="setup">
+        <h2>Configuration du tournoi</h2>
+        <input type="number" id="playerCount" placeholder="Nombre de joueurs">
+        <input type="number" id="roundCount" placeholder="Nombre de rondes">
+        <input type="number" id="maxPlayersPerGame" placeholder="Nombre max de joueurs par partie">
+        <button onclick="setupTournament()">Configurer</button>
+    </div>
+    <div id="playerSetup" style="display:none;">
+        <h2>Enregistrement des joueurs</h2>
+        <div id="playerInputs"></div>
+        <button onclick="startTournament()">Commencer le tournoi</button>
+    </div>
+    <div id="tournament" style="display:none;">
+        <h2>Tournoi en cours</h2>
+        <div id="currentRound"></div>
+        <div id="games"></div>
+        <button onclick="finishRound()">Terminer la ronde</button>
+    </div>
+    <div id="results" style="display:none;">
+        <h2>Résultats du tournoi</h2>
+        <table id="standings"></table>
+    </div>
+
+    <script>
+        let players = [];
+        let rounds = 0;
+        let currentRound = 0;
+        let maxPlayersPerGame = 0;
+        let games = [];
+
+        function setupTournament() {
+            const playerCount = parseInt(document.getElementById('playerCount').value);
+            rounds = parseInt(document.getElementById('roundCount').value);
+            maxPlayersPerGame = parseInt(document.getElementById('maxPlayersPerGame').value);
+
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('playerSetup').style.display = 'block';
+
+            const playerInputs = document.getElementById('playerInputs');
+            for (let i = 0; i < playerCount; i++) {
+                playerInputs.innerHTML += `<input type="text" id="player${i}" placeholder="Nom du joueur ${i + 1}">`;
+            }
+        }
+
+        function startTournament() {
+            players = Array.from(document.getElementById('playerInputs').children)
+                .map(input => ({ name: input.value, score: 0, opponents: [] }));
+
+            document.getElementById('playerSetup').style.display = 'none';
+            document.getElementById('tournament').style.display = 'block';
+
+            startNewRound();
+        }
+
+        function startNewRound() {
+            currentRound++;
+            document.getElementById('currentRound').innerHTML = `<h3>Ronde ${currentRound}</h3>`;
+
+            // Trier les joueurs par score
+            players.sort((a, b) => b.score - a.score);
+
+            // Créer les parties
+            games = [];
+            let remainingPlayers = [...players];
+
+            while (remainingPlayers.length > 0) {
+                let game = [];
+                for (let i = 0; i < maxPlayersPerGame && remainingPlayers.length > 0; i++) {
+                    let playerIndex = 0;
+                    // Trouver un joueur qui n'a pas encore affronté les autres dans cette partie
+                    while (playerIndex < remainingPlayers.length &&
+                           game.some(p => p.opponents.includes(remainingPlayers[playerIndex].name))) {
+                        playerIndex++;
+                    }
+                    if (playerIndex < remainingPlayers.length) {
+                        game.push(remainingPlayers[playerIndex]);
+                        remainingPlayers.splice(playerIndex, 1);
+                    }
+                }
+                games.push(game);
+            }
+
+            // Afficher les parties
+            const gamesDiv = document.getElementById('games');
+            gamesDiv.innerHTML = '';
+            games.forEach((game, index) => {
+                let gameHtml = `<h4>Partie ${index + 1}</h4>`;
+                game.forEach(player => {
+                    gameHtml += `<p>${player.name} <input type="number" id="score_${player.name}" placeholder="Score"></p>`;
+                });
+                gamesDiv.innerHTML += gameHtml;
+            });
+        }
+
+        function finishRound() {
+            // Mettre à jour les scores et les adversaires
+            games.forEach(game => {
+                game.forEach(player => {
+                    const score = parseInt(document.getElementById(`score_${player.name}`).value) || 0;
+                    player.score += score;
+                    player.opponents = player.opponents.concat(game.map(p => p.name).filter(name => name !== player.name));
+                });
+            });
+
+            if (currentRound < rounds) {
+                startNewRound();
+            } else {
+                endTournament();
+            }
+        }
+
+        function endTournament() {
+            document.getElementById('tournament').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+
+            // Trier les joueurs par score final
+            players.sort((a, b) => b.score - a.score);
+
+            // Afficher le classement final
+            const standings = document.getElementById('standings');
+            standings.innerHTML = `
+                <tr>
+                    <th>Position</th>
+                    <th>Nom</th>
+                    <th>Score</th>
+                </tr>
+            `;
+            players.forEach((player, index) => {
+                standings.innerHTML += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${player.name}</td>
+                        <td>${player.score}</td>
+                    </tr>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>

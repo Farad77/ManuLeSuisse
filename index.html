@@ -63,6 +63,11 @@
             <button onclick="startTournament()" class="btn btn-primary mt-3">Commencer le tournoi</button>
         </div>
         <div id="tournament" style="display:none;">
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <button onclick="fillRandomScores()" class="btn btn-secondary">Remplir avec des scores aléatoires</button>
+                </div>
+            </div>
             <div class="row">
                 <div class="col-md-8">
                     <h2>Tournoi en cours</h2>
@@ -97,6 +102,7 @@
         let currentRound = 0;
         let maxPlayersPerGame = 0;
         let games = [];
+        let gameHistory = [];
 
         function setupTournament() {
             const playerCount = parseInt(document.getElementById('playerCount').value);
@@ -132,33 +138,52 @@
         }
 
         function startNewRound() {
-            currentRound++;
-            document.getElementById('currentRound').innerHTML = `<h3>Ronde ${currentRound}</h3>`;
+    currentRound++;
+    document.getElementById('currentRound').innerHTML = `<h3>Ronde ${currentRound}</h3>`;
 
-            players.sort((a, b) => b.score - a.score);
+    // Trier les joueurs par score décroissant
+    players.sort((a, b) => b.score - a.score);
 
-            games = [];
-            let remainingPlayers = [...players];
+    games = [];
+    let remainingPlayers = [...players];
 
-            while (remainingPlayers.length > 0) {
-                let game = [];
-                for (let i = 0; i < maxPlayersPerGame && remainingPlayers.length > 0; i++) {
-                    let playerIndex = 0;
-                    while (playerIndex < remainingPlayers.length &&
-                           game.some(p => p.opponents.includes(remainingPlayers[playerIndex].name))) {
-                        playerIndex++;
-                    }
-                    if (playerIndex < remainingPlayers.length) {
-                        game.push(remainingPlayers[playerIndex]);
-                        remainingPlayers.splice(playerIndex, 1);
-                    }
-                }
-                games.push(game);
+    while (remainingPlayers.length > 0) {
+        let game = [];
+        for (let i = 0; i < maxPlayersPerGame && remainingPlayers.length > 0; i++) {
+            // Essayez d'abord de trouver un joueur qui n'a pas encore affronté les autres
+            let playerIndex = remainingPlayers.findIndex(player => 
+                !game.some(p => p.opponents.includes(player.name))
+            );
+
+            // Si aucun joueur ne correspond, prenez simplement le premier joueur disponible
+            if (playerIndex === -1) {
+                playerIndex = 0;
             }
 
-            renderGames();
+            game.push(remainingPlayers[playerIndex]);
+            remainingPlayers.splice(playerIndex, 1);
         }
 
+        if (game.length > 0) {
+            games.push(game);
+        }
+    }
+
+    // Mise à jour des adversaires pour chaque joueur
+    games.forEach(game => {
+        game.forEach(player => {
+            player.opponents = player.opponents.concat(game.map(p => p.name).filter(name => name !== player.name));
+        });
+    });
+
+    renderGames();
+}
+function fillRandomScores() {
+            const scoreInputs = document.querySelectorAll('input[id^="score_"]');
+            scoreInputs.forEach(input => {
+                input.value = Math.floor(Math.random() * 101); // Génère un nombre aléatoire entre 0 et 100
+            });
+        }
         function renderGames() {
             const gamesDiv = document.getElementById('games');
             gamesDiv.innerHTML = '';
@@ -215,22 +240,26 @@
         }
 
         function finishRound() {
-            games.forEach((game, gameIndex) => {
-                game.forEach((player, playerIndex) => {
-                    const score = parseInt(document.getElementById(`score_${gameIndex}_${playerIndex}`).value) || 0;
-                    player.score += score;
-                    player.opponents = player.opponents.concat(game.map(p => p.name).filter(name => name !== player.name));
-                });
-            });
+    let roundScores = [];
+    games.forEach((game, gameIndex) => {
+        let gameScores = [];
+        game.forEach((player, playerIndex) => {
+            const score = parseInt(document.getElementById(`score_${gameIndex}_${playerIndex}`).value) || 0;
+            player.score += score;
+            gameScores.push({ name: player.name, score: score });
+        });
+        roundScores.push(gameScores);
+    });
+    gameHistory.push({ round: currentRound, scores: roundScores });
 
-            updateScoreTable();
+    updateScoreTable();
 
-            if (currentRound < rounds) {
-                startNewRound();
-            } else {
-                endTournament();
-            }
-        }
+    if (currentRound < rounds) {
+        startNewRound();
+    } else {
+        endTournament();
+    }
+}
 
         function updateScoreTable() {
             const scoreTableBody = document.querySelector('#scoreTable tbody');
@@ -246,31 +275,69 @@
         }
 
         function endTournament() {
-            document.getElementById('tournament').style.display = 'none';
-            document.getElementById('results').style.display = 'block';
+    document.getElementById('tournament').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
 
-            players.sort((a, b) => b.score - a.score);
+    players.sort((a, b) => b.score - a.score);
 
-            const standings = document.getElementById('standings');
-            standings.innerHTML = `
+    const standings = document.getElementById('standings');
+    standings.innerHTML = `
+        <thead>
+            <tr>
+                <th>Position</th>
+                <th>Nom</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${players.map((player, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${player.name}</td>
+                    <td>${player.score}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    `;
+
+    // Ajout de l'historique des parties
+    const historyDiv = document.createElement('div');
+    historyDiv.innerHTML = '<h3>Historique des parties</h3>';
+    
+    gameHistory.forEach((round, roundIndex) => {
+        const roundDiv = document.createElement('div');
+        roundDiv.innerHTML = `<h4>Ronde ${roundIndex + 1}</h4>`;
+        
+        round.scores.forEach((game, gameIndex) => {
+            const gameTable = document.createElement('table');
+            gameTable.className = 'table table-striped mb-3';
+            gameTable.innerHTML = `
                 <thead>
                     <tr>
-                        <th>Position</th>
-                        <th>Nom</th>
+                        <th colspan="2">Partie ${gameIndex + 1}</th>
+                    </tr>
+                    <tr>
+                        <th>Joueur</th>
                         <th>Score</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${players.map((player, index) => `
+                    ${game.map(player => `
                         <tr>
-                            <td>${index + 1}</td>
                             <td>${player.name}</td>
                             <td>${player.score}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             `;
-        }
+            roundDiv.appendChild(gameTable);
+        });
+        
+        historyDiv.appendChild(roundDiv);
+    });
+
+    document.getElementById('results').appendChild(historyDiv);
+}
     </script>
 </body>
 </html>
